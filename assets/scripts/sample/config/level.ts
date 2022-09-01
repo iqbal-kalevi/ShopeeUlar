@@ -6,17 +6,17 @@ type BoardConfig = {
 
 type SnakeConfig = {
     parts: Array<Position>,
-    interval: Interval,
+    interval: SnakeInterval,
 }
 
-type Interval = {
+export type SnakeInterval = {
     initial: number,
     accelerateMultiplier: number,
     accelerateEvery: number,
     minimum: number,
 }
 
-type Position = {
+export type Position = {
     x: number,
     y: number,
 }
@@ -155,10 +155,10 @@ export const levelConfigs = [
       }, 
       snakeConfig: {
           parts: [
-              { x: 1, y: 7 },
+              { x: 1, y: 9 },
               { x: 1, y: 8 },
-              { x: 1, y: 9 },
-              { x: 1, y: 9 },
+              { x: 1, y: 7 },
+              { x: 1, y: 7 },
           ],
           interval: {
               initial: 0.3,
