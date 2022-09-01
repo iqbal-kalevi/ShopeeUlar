@@ -1,0 +1,18 @@
+{
+  "ver": "1.1.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "fe927217-3975-44a3-9703-a47b83aee1d8",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "compressionType": {},
+    "isRemoteBundle": {
+      "web-desktop": true,
+      "web-mobile": true
+    },
+    "isBundle": true,
+    "priority": 20,
+    "bundleName": "errorPage"
+  }
+}
