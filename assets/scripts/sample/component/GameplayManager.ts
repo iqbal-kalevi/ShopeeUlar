@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, random, instantiate, Prefab, Vec3, input, Input, math, Vec2, EventKeyboard, KeyCode, macro, tween } from 'cc';
+import { _decorator, Component, Node, random, instantiate, Prefab, Vec3, input, Input, math, Vec2, EventKeyboard, KeyCode, macro, tween, Sprite, Color } from 'cc';
 import { getRandomLevel, LevelConfig, levelConfigs, Position, SnakeInterval } from '../config/level';
 import { ShopeeSprite } from './ShopeeSprite';
 const { ccclass, property } = _decorator;
@@ -39,6 +39,7 @@ export class GameplayManager extends Component {
     private fruit: Node = null
     private fruitTilePos: Position;
     private eatenFruitCount: number = 0;
+    private eatenFruitPosition: Array<number> = [];
 
     onLoad(){
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
@@ -52,11 +53,44 @@ export class GameplayManager extends Component {
             }
             
             let lastPos: Vec3 = null;
+            let haltedPartBloatIndex: Array<number> = [];
             this.snakeParent.children.forEach((snakePart, index) => {
+                let hasFruit = false;
+                let snakeSprite = snakePart.getComponentInChildren(ShopeeSprite);
+
+                for(let i = 0; i < this.eatenFruitPosition.length; i++){
+                    let snakePartIndex = this.eatenFruitPosition[i];
+
+                    if(snakePartIndex == index && haltedPartBloatIndex.indexOf(index) === -1){
+                        hasFruit = true;
+                        this.eatenFruitPosition[i] = index+1;
+                        haltedPartBloatIndex.push(this.eatenFruitPosition[i]);
+                    }
+                }
+
+                if(hasFruit && index != 0){
+                    snakeSprite.setFrame(1);
+                    snakeSprite.setColor(Color.GRAY);
+                }else if(snakeSprite.frameKey == '1'){
+                    snakeSprite.setFrame(3);
+                    snakeSprite.setColor(Color.WHITE);
+                }
+
+                //handle movement
                 const premovePos = new Vec3(snakePart.position);
                 this.moveAndRotateSnakePart(snakePart, snakePart.position, index == 0 ? this.tileToLocalPosition(newPos.x, newPos.y) : lastPos);
                 lastPos = premovePos; 
             });
+
+            if(this.eatenFruitPosition.length > 0){
+                if(this.eatenFruitPosition[0] == this.snakeParent.children.length){
+                    this.eatenFruitPosition.shift();
+                    const snakePart: Node = instantiate(this.snakePartPrefab);
+                    snakePart.setParent(this.snakeParent);
+                    snakePart.getComponentInChildren(ShopeeSprite).setFrame(2);
+                    snakePart.position = this.snakeParent.children[this.snakeParent.children.length-2].position;
+                }
+            }
             this.currentSnakeTilePosition = newPos;
         }
     }
@@ -129,6 +163,8 @@ export class GameplayManager extends Component {
     onFruitEaten(){
         this.eatenFruitCount++;
 
+        this.eatenFruitPosition.push(0);
+
         if(this.eatenFruitCount % this.snakeInterval.accelerateEvery == 0){
             this.accelerateCount++;
             this.eatenFruitCount = 0;
@@ -159,6 +195,10 @@ export class GameplayManager extends Component {
             }
             tileFrame = this.toggleFrame(tileFrame, 0, 2);
         }
+    }
+
+    instantiateSnakePart(){
+        
     }
 
     generateSnake(levelConfig: LevelConfig){
