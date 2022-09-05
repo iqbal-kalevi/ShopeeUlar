@@ -67,10 +67,11 @@ export class GameplayManager extends Component {
   private isSnakeScheduled = false;
   private snakeSchedule: () => void;
   private fruit: Node = null;
-  private fruitTilePos: Position;
+  private fruitTilePos: Position = {x: -1, y: -1};
   private eatenFruitCount: number = 0;
   private eatenFruitSnakePartIndexes: Array<number> = []; //Index position of fruit in snake part array.
   private snakeScheduleUpdateInterval;
+  private snakePartTilePos: Array<Position> = []; //Tile position of snake parts.
 
   onLoad() {
     input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
@@ -117,8 +118,9 @@ export class GameplayManager extends Component {
 
   setupLevel(levelConfig: LevelConfig) {
     this.unscheduleSnake();
-    
+
     //Variables reset.
+    this.snakePartTilePos = [];
     this.eatenFruitSnakePartIndexes = [];
     this.moveDir = { x: 0, y: 0 };
     this.snakeScheduleAllowed = true;
@@ -154,6 +156,8 @@ export class GameplayManager extends Component {
         console.log("Out of bounds!");
       } else if (this.currentTileLayout[newPos.y][newPos.x] == 1) {
         console.log("Wall hit!");
+      } else if (this.snakeCollide(newPos)) {
+        console.log("Self-cannibalism occured!");
       }
 
       //Check if fruit is eaten.
@@ -206,13 +210,15 @@ export class GameplayManager extends Component {
           );
 
         //Handle movement.
-        this.moveAndRotateSnakePart(
-          snakePart,
-          snakePart.position,
+        const nextPos =
           i == 0
             ? this.tileToLocalPosition(newPos.x, newPos.y)
-            : this.snakeParent.children[i - 1].position
-        );
+            : this.snakeParent.children[i - 1].position;
+
+        this.moveAndRotateSnakePart(snakePart, snakePart.position, nextPos);
+
+        const tilePos = this.localToTilePosition(nextPos.x, nextPos.y);
+        this.snakePartTilePos[i] = tilePos;
 
         //Handle eaten fruit's snake-part index position.
         for (let i = 0; i < this.eatenFruitSnakePartIndexes.length; i++) {
@@ -269,14 +275,22 @@ export class GameplayManager extends Component {
 
   spawnFruit() {
     //Pick random starting point.
+
+    const prevPos = this.fruitTilePos;
     let yInit = Math.floor(Math.random() * this.currentTileLayout.length);
     let xInit = Math.floor(Math.random() * this.currentTileLayout[0].length);
+    let yLimit = this.currentTileLayout.length;
+    let xLimit = this.currentTileLayout[0].length;
 
     for (let i = 0; i < 2; i++) {
       //Iterate tile layout until valid fruit spawn position is found.
-      for (let y = yInit; y < this.currentTileLayout.length; y++) {
-        for (let x = xInit; x < this.currentTileLayout[0].length; x++) {
-          if (this.currentTileLayout[y][x] != 1) {
+      for (let y = yInit; y < yLimit; y++) {
+        for (let x = xInit; x < xLimit; x++) {
+          if (
+            this.currentTileLayout[y][x] != 1 &&
+            !this.snakeCollide({ x: x, y: y }) &&
+            !(prevPos.x == x && prevPos.y == y)
+          ) {
             if (this.fruit == null) {
               this.fruit = instantiate(this.fruitPrefab);
               this.fruit.setParent(this.fruitParent);
@@ -289,12 +303,26 @@ export class GameplayManager extends Component {
         }
       }
 
-      //Restart iteration but from initial starting point.
+      //Restart iteration from initial starting point (0,0) to previous starting point.
+      yLimit = yInit + 1;
+      xLimit = xInit + 1;
       yInit = 0;
       xInit = 0;
     }
 
     //Handle no valid fruit spawn position here.
+    console.log("You probably win the game.");
+  }
+
+  snakeCollide(pos: Position) {
+    let result = false;
+    this.snakePartTilePos.forEach((snakePartTilePos) => {
+      if (snakePartTilePos.x == pos.x && snakePartTilePos.y == pos.y) {
+        result = true;
+        return;
+      }
+    });
+    return result;
   }
 
   onFruitEaten() {
@@ -331,6 +359,8 @@ export class GameplayManager extends Component {
     const snakePart: Node = instantiate(this.snakePartPrefab);
     snakePart.setParent(this.snakeParent);
     snakePart.position = position;
+    const tilePos = this.localToTilePosition(position.x, position.y);
+    this.snakePartTilePos.push(tilePos);
     return snakePart.getComponentInChildren(ShopeeSprite);
   }
 
@@ -427,8 +457,10 @@ export class GameplayManager extends Component {
 
   localToTilePosition(x, y) {
     return {
-      x: x / this.tileSize - this.initialXPosition / this.tileSize,
-      y: -(y / this.tileSize - this.initialYPosition / this.tileSize),
+      x: Math.round(x / this.tileSize - this.initialXPosition / this.tileSize),
+      y: Math.round(
+        -(y / this.tileSize - this.initialYPosition / this.tileSize)
+      ),
     };
   }
 
