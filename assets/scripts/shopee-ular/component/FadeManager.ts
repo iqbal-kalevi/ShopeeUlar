@@ -27,14 +27,18 @@ export class FadeManager extends Component {
     start(){
         //@ts-ignore
         game.on(GAME_EVENT.SCENE_CHANGE, (scene) => {this.changeScene(null, scene)}, this, true);
+        //@ts-ignore
+        game.on(GAME_EVENT.FADE_IN, (delay, callback) => {this.fade(this.fadeInDuration, this.inOpacity, callback, delay)}, this);
+        //@ts-ignore
+        game.on(GAME_EVENT.FADE_OUT, (delay, callback) => {this.fade(this.fadeOutDuration, this.outOpacity, callback, delay)}, this);
     }
 
-    fade(duration, opacity, callback = () => {}){
+    fade(duration, opacity, callback = () => {}, delay = 0){
         if(this.isFading) return;
 
         this.isFading = true;
-        tween()
-        .target(this.uIOpacity)
+        tween(this.uIOpacity)
+        .delay(delay)
         .to(duration, {opacity: opacity})
         .call(
             () => {

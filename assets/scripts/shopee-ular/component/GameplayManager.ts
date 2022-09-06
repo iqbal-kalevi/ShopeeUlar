@@ -17,7 +17,15 @@ import {
   Sprite,
   Color,
   Quat,
+  Label,
+  game,
+  color,
 } from "cc";
+import { GAME_EVENT } from "../../lib/enum/game";
+import {
+  getHighscoreFromLocalStorage,
+  updateLocalStorageHighscore,
+} from "../../lib/util/localStorage";
 import {
   getRandomLevel,
   LevelConfig,
@@ -25,18 +33,24 @@ import {
   Position,
   SnakeInterval,
 } from "../config/level";
+import {
+  AlertDialogButtonOption,
+  AlertDialogOption,
+  displayAlertDialog,
+} from "../util/AlertDialog/AlertDialogHandler";
+import { HighscoreLoader } from "./HighscoreLoader";
 import { ShopeeSprite } from "./ShopeeSprite";
 const { ccclass, property } = _decorator;
 
 enum SNAKE_SPRITE_TYPE {
   HEAD = 0,
-  BODY = 3,
+  BLOAT = 1,
   TAIL = 2,
+  BODY = 3,
 }
 
 @ccclass("GameplayManager")
 export class GameplayManager extends Component {
-  //initial config
   @property({ type: Node })
   private snakeParent: Node;
   @property({ type: Prefab })
@@ -51,60 +65,87 @@ export class GameplayManager extends Component {
   private fruitParent;
   @property({ type: Prefab })
   private fruitPrefab;
-  @property({ type: Number })
-  private initialXPosition = -120;
-  @property({ type: Number })
-  private initialYPosition = 80;
-  private tileSize = 24;
-  private currentTileLayout: Array<Array<number>>;
-  private currentSnakeHeadTilePosition: Position;
 
-  //gameplay config
+  @property({ type: Label })
+  private currentScoreLabel: Label;
+  @property({ type: HighscoreLoader })
+  private highscoreLoader: HighscoreLoader;
+
+  private tileSize = 26;
+  private initialYPosition = 0;
+  private initialXPosition = 0;
+  private currentTileLayout: Array<Array<number>>;
   private snakeInterval: SnakeInterval;
   private accelerateCount: number = 0;
   private moveDir: Position = { x: 0, y: 0 };
-  private snakeScheduleAllowed: boolean;
+  private pendingMoveDir: Position;
+  private isSnakeScheduleAllowed: boolean;
   private isSnakeScheduled = false;
   private snakeSchedule: () => void;
   private fruit: Node = null;
-  private fruitTilePos: Position = {x: -1, y: -1};
+  private fruitTilePos: Position = { x: -1, y: -1 };
   private eatenFruitCount: number = 0;
   private eatenFruitSnakePartIndexes: Array<number> = []; //Index position of fruit in snake part array.
-  private snakeScheduleUpdateInterval;
+  private snakeScheduleUpdateInterval: number;
   private snakePartTilePos: Array<Position> = []; //Tile position of snake parts.
+  private currentScore = 0;
 
   onLoad() {
+    //Based on fixed board width of 12 tiles and (0.5, 0.5) anchor point.
+    this.initialXPosition = this.tileSize * -5.5;
+
     input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
-    this.initSnakeSchedule();
+    this.initSnakeScheduleCallback();
   }
 
   onKeyDown(event: EventKeyboard) {
-    switch (event.keyCode) {
+    this.onMoveInput(event.keyCode);
+  }
+
+  public onKeypadDown(event: Event = null, keyCodeStr: string) {
+    const keyCode = parseInt(keyCodeStr);
+    if (keyCode >= 37 && keyCode <= 40) {
+      this.onMoveInput(keyCode);
+    }
+  }
+
+  onMoveInput(keyCode) {
+    let prevMoveDir = this.moveDir;
+    let newMoveDir: Position;
+    switch (keyCode) {
       case KeyCode.ARROW_LEFT:
-        this.moveDir = { x: -1, y: 0 };
+        newMoveDir = { x: -1, y: 0 };
         break;
       case KeyCode.ARROW_UP:
-        this.moveDir = { x: 0, y: -1 };
+        newMoveDir = { x: 0, y: -1 };
         break;
       case KeyCode.ARROW_RIGHT:
-        this.moveDir = { x: 1, y: 0 };
+        newMoveDir = { x: 1, y: 0 };
         break;
       case KeyCode.ARROW_DOWN:
-        this.moveDir = { x: 0, y: 1 };
+        newMoveDir = { x: 0, y: 1 };
         break;
-      case KeyCode.SPACE:
-        this.moveDir = { x: 0, y: 0 };
+      default:
+        newMoveDir = { x: 0, y: 0 };
         break;
+    }
+
+    if (
+      prevMoveDir.x + newMoveDir.x == 0 &&
+      prevMoveDir.y + newMoveDir.y == 0
+    ) {
+      this.pendingMoveDir = prevMoveDir;
+    } else {
+      this.pendingMoveDir = newMoveDir;
+    }
+
+    if (this.isSnakeScheduleAllowed && !this.isSnakeScheduled) {
+      this.scheduleSnake();
     }
   }
 
   start() {
     this.setupLevel(getRandomLevel());
-    input.on(
-      Input.EventType.TOUCH_START,
-      () => this.setupLevel(getRandomLevel()),
-      this
-    );
   }
 
   getSnakeScheduleUpdateInterval() {
@@ -116,14 +157,15 @@ export class GameplayManager extends Component {
       : this.snakeInterval.minimum;
   }
 
-  setupLevel(levelConfig: LevelConfig) {
+  setupLevel(levelConfig: LevelConfig, resetScore = true) {
     this.unscheduleSnake();
 
     //Variables reset.
+    if (resetScore) this.setScore(0);
     this.snakePartTilePos = [];
     this.eatenFruitSnakePartIndexes = [];
     this.moveDir = { x: 0, y: 0 };
-    this.snakeScheduleAllowed = true;
+    this.isSnakeScheduleAllowed = true;
     this.accelerateCount = 0;
     this.eatenFruitCount = 0;
 
@@ -131,19 +173,17 @@ export class GameplayManager extends Component {
     this.generateBoard(levelConfig);
     this.generateSnake(levelConfig);
     this.spawnFruit();
-    if (this.snakeScheduleAllowed) {
-      this.scheduleSnake();
-    }
   }
 
-  initSnakeSchedule() {
+  initSnakeScheduleCallback() {
     this.snakeSchedule = () => {
+      this.moveDir = this.pendingMoveDir;
       if (this.moveDir.x == 0 && this.moveDir.y == 0) return;
 
       //Get next position based on move direction.
       const newPos = {
-        x: this.moveDir.x + this.currentSnakeHeadTilePosition.x,
-        y: this.moveDir.y + this.currentSnakeHeadTilePosition.y,
+        x: this.moveDir.x + this.snakePartTilePos[0].x,
+        y: this.moveDir.y + this.snakePartTilePos[0].y,
       };
 
       //Check if next position is invalid.
@@ -153,11 +193,11 @@ export class GameplayManager extends Component {
         this.currentTileLayout.length <= newPos.y ||
         this.currentTileLayout[0].length <= newPos.x
       ) {
-        console.log("Out of bounds!");
+        this.onHazardCollide("You went out of bounds!");
+        return;
       } else if (this.currentTileLayout[newPos.y][newPos.x] == 1) {
-        console.log("Wall hit!");
-      } else if (this.snakeCollide(newPos)) {
-        console.log("Self-cannibalism occured!");
+        this.onHazardCollide("You hit a wall!");
+        return;
       }
 
       //Check if fruit is eaten.
@@ -186,6 +226,15 @@ export class GameplayManager extends Component {
 
           tailSprite.setFrame(SNAKE_SPRITE_TYPE.TAIL);
 
+          tailSprite.node.scale = new Vec3(0.7, 0.7, 0.7);
+          tween(tailSprite.node)
+            .to(
+              this.snakeScheduleUpdateInterval,
+              { scale: Vec3.ONE },
+              { easing: "quadIn" }
+            )
+            .start();
+
           //Check for speed-up.
           if (this.eatenFruitCount % this.snakeInterval.accelerateEvery == 0) {
             this.accelerateCount++;
@@ -199,9 +248,8 @@ export class GameplayManager extends Component {
       let pendingPartBloatIndexes: Array<number> = []; //Snake parts to be bloated next schedule iteration.
 
       //Iterate and process each snake part.
-      let currentAscIndex = -1;
       for (let i = this.snakeParent.children.length - 1; i >= 0; i--) {
-        currentAscIndex++;
+        const currentAscIndex = this.snakeParent.children.length - 1 - i;
         const snakePart = this.snakeParent.children[i];
         let hasFruit = false;
         let snakeSprite =
@@ -218,7 +266,7 @@ export class GameplayManager extends Component {
         this.moveAndRotateSnakePart(snakePart, snakePart.position, nextPos);
 
         const tilePos = this.localToTilePosition(nextPos.x, nextPos.y);
-        this.snakePartTilePos[i] = tilePos;
+        this.snakePartTilePos[i] = i == 0 ? newPos : tilePos;
 
         //Handle eaten fruit's snake-part index position.
         for (let i = 0; i < this.eatenFruitSnakePartIndexes.length; i++) {
@@ -240,22 +288,54 @@ export class GameplayManager extends Component {
         //Handle bloat/eating animation.
         if (hasFruit && currentAscIndex != 0) {
           snakeSprite.setColor(Color.fromHEX(new Color(), "80F3A9"));
+          const duration = this.snakeScheduleUpdateInterval / 2;
           tween(snakeSprite.node)
-            .to(this.snakeScheduleUpdateInterval, {
-              scale: new Vec3(1.25, 1.25, 1.25),
-            })
+            .to(
+              duration,
+              {
+                scale: new Vec3(1.3, 1.3, 1.3),
+              },
+              { easing: "quadIn" }
+            )
             .call(() => {
+              snakeSprite.setFrame(SNAKE_SPRITE_TYPE.BLOAT);
               tween(snakeSprite.node)
-                .to(this.snakeScheduleUpdateInterval, { scale: Vec3.ONE })
+                .to(duration, { scale: Vec3.ONE }, { easing: "quadIn" })
+                .call(() => {
+                  snakeSprite.setFrame(SNAKE_SPRITE_TYPE.BODY);
+                  snakeSprite.setColor(Color.WHITE);
+                })
                 .start();
-              snakeSprite.setColor(Color.WHITE);
             })
             .start();
         }
       }
 
-      this.currentSnakeHeadTilePosition = newPos;
+      //Check if self-cannibalism occured after movement.
+      if (this.snakeCollide(newPos, false)) {
+        this.onHazardCollide("You commited self-cannibalism!");
+        return;
+      }
     };
+  }
+
+  onHazardCollide(message: string) {
+    this.isSnakeScheduleAllowed = false;
+    this.unscheduleSnake();
+
+    displayAlertDialog(
+      new AlertDialogOption("Your Score", this.currentScore.toString(), [
+        new AlertDialogButtonOption("Cancel", undefined, true, () => {
+          game.emit(GAME_EVENT.SCENE_CHANGE, "landing");
+        }),
+        new AlertDialogButtonOption("Play Again", Color.RED, true, () => {
+          game.emit(GAME_EVENT.FADE_OUT, 1, () => {
+            this.setupLevel(getRandomLevel(), true);
+            game.emit(GAME_EVENT.FADE_IN, .25);
+          });
+        }),
+      ])
+    );
   }
 
   scheduleSnake() {
@@ -314,21 +394,34 @@ export class GameplayManager extends Component {
     console.log("You probably win the game.");
   }
 
-  snakeCollide(pos: Position) {
-    let result = false;
-    this.snakePartTilePos.forEach((snakePartTilePos) => {
-      if (snakePartTilePos.x == pos.x && snakePartTilePos.y == pos.y) {
-        result = true;
-        return;
+  snakeCollide(pos: Position, includeHead = true) {
+    for (let i = includeHead ? 0 : 1; i < this.snakePartTilePos.length; i++) {
+      if (
+        this.snakePartTilePos[i].x == pos.x &&
+        this.snakePartTilePos[i].y == pos.y
+      ) {
+        return true;
       }
-    });
-    return result;
+    }
+
+    return false;
   }
 
   onFruitEaten() {
+    this.setScore(++this.currentScore);
     this.eatenFruitCount++;
     this.eatenFruitSnakePartIndexes.push(0);
     this.spawnFruit();
+  }
+
+  setScore(amount: number) {
+    this.currentScore = amount;
+    this.currentScoreLabel.string = this.currentScore.toString();
+
+    if (this.currentScore > getHighscoreFromLocalStorage()) {
+      updateLocalStorageHighscore(this.currentScore);
+      this.highscoreLoader.loadHighscore();
+    }
   }
 
   generateBoard(levelConfig: LevelConfig) {
@@ -379,7 +472,6 @@ export class GameplayManager extends Component {
 
       if (i == 0) {
         headSpriteNode = snakeSprite.node;
-        this.currentSnakeHeadTilePosition = snakeTilePos;
       }
 
       if (prevSnakePos != null) {
@@ -387,6 +479,10 @@ export class GameplayManager extends Component {
 
         if (i == 1) {
           this.rotateSnakePart(headSpriteNode, localSpawnPos, prevSnakePos, 0);
+          this.moveDir = {
+            x: this.snakePartTilePos[0].x - snakeTilePos.x,
+            y: this.snakePartTilePos[0].y - snakeTilePos.y,
+          };
         }
 
         if (i == levelConfig.snakeConfig.parts.length - 1) {
@@ -420,10 +516,6 @@ export class GameplayManager extends Component {
         ? 0
         : spriteNode.angle;
 
-    // let quat = new Quat();
-    // tween(spriteNode)
-    //   .to(tweenDuration, { rotation: Quat.fromEuler(quat, 0, 0, angle) })
-    //   .start();
     spriteNode.angle = angle;
   }
 
@@ -437,12 +529,16 @@ export class GameplayManager extends Component {
     );
 
     tween(bodyNode)
-      .to(this.snakeScheduleUpdateInterval, { position: nextPos })
+      .to(
+        this.snakeScheduleUpdateInterval,
+        { position: nextPos },
+        { easing: "quadOut" }
+      )
       .start();
   }
 
   onSnakeInvalid() {
-    this.snakeScheduleAllowed = false;
+    this.isSnakeScheduleAllowed = false;
     this.unscheduleSnake();
     this.snakeParent.removeAllChildren();
     console.log("Snake Invalid!");

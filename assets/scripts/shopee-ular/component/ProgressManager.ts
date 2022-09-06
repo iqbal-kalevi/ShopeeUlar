@@ -2,7 +2,7 @@ import { _decorator, Component, Node, SliderComponent, Slider, ProgressBar, Rich
 import { ASSET_LOADER_EVENT } from '../../lib/enum/assetLoader';
 import { GAME_EVENT } from '../../lib/enum/game';
 import { getKeyEnum } from '../../lib/util/asset';
-import { ASSET_KEY } from '../../sample/enum/asset';
+import { ASSET_KEY } from '../enum/asset';
 import { ShopeeLabel } from './ShopeeLabel';
 import { ShopeeSprite } from './ShopeeSprite';
 const { ccclass, property } = _decorator;
