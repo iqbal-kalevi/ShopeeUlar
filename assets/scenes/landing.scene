@@ -1137,7 +1137,7 @@
     },
     "component": "",
     "_componentId": "7fc73nJeHZE7Y5n0n9cmtoz",
-    "handler": "changeScene",
+    "handler": "changeSceneClick",
     "customEventData": "gameplay"
   },
   {

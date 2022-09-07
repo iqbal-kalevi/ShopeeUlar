@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Button } from 'cc';
 import { getSoundStateFromLocalStorage, updateLocalStorageSoundState } from '../../lib/util/localStorage';
 import { ASSET_KEY } from '../enum/asset';
+import { AudioHandler } from './AudioHandler';
 import { ShopeeSprite } from './ShopeeSprite';
 const { ccclass, property } = _decorator;
 

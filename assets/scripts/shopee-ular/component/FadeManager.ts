@@ -1,5 +1,7 @@
 import { _decorator, Component, Node, Sprite, Color, color, tween, UIOpacity, game, director, EventHandler } from 'cc';
 import { GAME_EVENT } from '../../lib/enum/game';
+import { ASSET_KEY } from '../enum/asset';
+import { AudioHandler } from './AudioHandler';
 const { ccclass, property, requireComponent } = _decorator;
 const eventTarget = new EventTarget();
 
@@ -26,7 +28,7 @@ export class FadeManager extends Component {
 
     start(){
         //@ts-ignore
-        game.on(GAME_EVENT.SCENE_CHANGE, (scene) => {this.changeScene(null, scene)}, this, true);
+        game.on(GAME_EVENT.SCENE_CHANGE, (scene) => {this.changeScene(null, scene)}, this);
         //@ts-ignore
         game.on(GAME_EVENT.FADE_IN, (delay, callback) => {this.fade(this.fadeInDuration, this.inOpacity, callback, delay)}, this);
         //@ts-ignore
@@ -55,6 +57,9 @@ export class FadeManager extends Component {
         })
     }
 
-   
+   changeSceneClick (event: Event = null, scene: string){
+        AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_BUTTON);
+        this.changeScene(event, scene);
+   }
 }
 

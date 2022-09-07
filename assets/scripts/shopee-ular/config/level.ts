@@ -173,3 +173,7 @@ export const levelConfigs = [
 export function getRandomLevel (){
     return levelConfigs[Math.floor(Math.random() * levelConfigs.length)];
 }
+
+export function getInvalidLevel (){
+    return levelConfigs[3];
+}

@@ -16,16 +16,19 @@
     "_children": [
       {
         "__id__": 2
+      },
+      {
+        "__id__": 42
       }
     ],
     "_active": true,
     "_components": [],
     "_prefab": {
-      "__id__": 42
+      "__id__": 52
     },
     "autoReleaseAssets": false,
     "_globals": {
-      "__id__": 43
+      "__id__": 53
     },
     "_id": "043a829b-3afd-46e7-9e75-82b62d96444e"
   },
@@ -1084,30 +1087,163 @@
     "_id": "c5V1EV8IpMtrIvY1OE9t2u"
   },
   {
+    "__type__": "cc.Node",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 1
+    },
+    "_prefab": {
+      "__id__": 43
+    },
+    "__editorExtras__": {}
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 42
+    },
+    "asset": {
+      "__uuid__": "731e9a39-4ccb-4f73-9a6b-cb92c97345fa",
+      "__expectedType__": "cc.Prefab"
+    },
+    "fileId": "3cvq4pEBRMe4kHtb5qwAbT",
+    "instance": {
+      "__id__": 44
+    }
+  },
+  {
+    "__type__": "cc.PrefabInstance",
+    "fileId": "43hK7Wj9dL05r8NF9KCoHd",
+    "mountedChildren": [],
+    "mountedComponents": [],
+    "propertyOverrides": [
+      {
+        "__id__": 45
+      },
+      {
+        "__id__": 47
+      },
+      {
+        "__id__": 48
+      },
+      {
+        "__id__": 49
+      },
+      {
+        "__id__": 50
+      }
+    ],
+    "removedComponents": []
+  },
+  {
+    "__type__": "CCPropertyOverrideInfo",
+    "targetInfo": {
+      "__id__": 46
+    },
+    "propertyPath": [
+      "_name"
+    ],
+    "value": "Audio Handler"
+  },
+  {
+    "__type__": "cc.TargetInfo",
+    "localID": [
+      "3cvq4pEBRMe4kHtb5qwAbT"
+    ]
+  },
+  {
+    "__type__": "CCPropertyOverrideInfo",
+    "targetInfo": {
+      "__id__": 46
+    },
+    "propertyPath": [
+      "_lpos"
+    ],
+    "value": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "__type__": "CCPropertyOverrideInfo",
+    "targetInfo": {
+      "__id__": 46
+    },
+    "propertyPath": [
+      "_lrot"
+    ],
+    "value": {
+      "__type__": "cc.Quat",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    }
+  },
+  {
+    "__type__": "CCPropertyOverrideInfo",
+    "targetInfo": {
+      "__id__": 46
+    },
+    "propertyPath": [
+      "_euler"
+    ],
+    "value": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "__type__": "CCPropertyOverrideInfo",
+    "targetInfo": {
+      "__id__": 51
+    },
+    "propertyPath": [
+      "audioPrefab"
+    ],
+    "value": {
+      "__uuid__": "114ef043-2feb-4f04-bc32-c5a3697efdd8",
+      "__expectedType__": "cc.Prefab"
+    }
+  },
+  {
+    "__type__": "cc.TargetInfo",
+    "localID": [
+      "b3pGBU2KRFgZjtCSJoX2Xn"
+    ]
+  },
+  {
     "__type__": "cc.PrefabInfo",
     "fileId": "043a829b-3afd-46e7-9e75-82b62d96444e",
     "nestedPrefabInstanceRoots": [
       {
         "__id__": 27
+      },
+      {
+        "__id__": 42
       }
     ]
   },
   {
     "__type__": "cc.SceneGlobals",
     "ambient": {
-      "__id__": 44
+      "__id__": 54
     },
     "shadows": {
-      "__id__": 45
+      "__id__": 55
     },
     "_skybox": {
-      "__id__": 46
+      "__id__": 56
     },
     "fog": {
-      "__id__": 47
+      "__id__": 57
     },
     "octree": {
-      "__id__": 48
+      "__id__": 58
     }
   },
   {

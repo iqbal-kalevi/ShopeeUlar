@@ -3,6 +3,7 @@ import { ASSET_LOADER_EVENT } from '../../lib/enum/assetLoader';
 import { GAME_EVENT } from '../../lib/enum/game';
 import { getKeyEnum } from '../../lib/util/asset';
 import { ASSET_KEY } from '../enum/asset';
+import { AudioHandler } from './AudioHandler';
 import { ShopeeLabel } from './ShopeeLabel';
 import { ShopeeSprite } from './ShopeeSprite';
 const { ccclass, property } = _decorator;
@@ -22,6 +23,13 @@ export class ProgressManager extends Component {
             this.progressBar.progress = 0;
         }, this);
 
+        this.node.on(ASSET_LOADER_EVENT.COMPLETE, () => {
+            this.progressBar.progress = 1;
+            game.emit(GAME_EVENT.SCENE_CHANGE, "landing");
+        }, this);
+    }
+
+    start(){
         this.node.on(ASSET_LOADER_EVENT.ASSET_LOAD_SUCCESS, (progress, key) => {
             this.loadingLabel.setText(`${Math.round(progress*100)}%`);
             this.progressBar.progress = progress;
@@ -32,11 +40,10 @@ export class ProgressManager extends Component {
             if(key == getKeyEnum(ASSET_KEY.FONT_SHP21_REGULAR)){
                 this.loadingLabel.reload();
             }
-        }, this);
-
-        this.node.on(ASSET_LOADER_EVENT.COMPLETE, () => {
-            this.progressBar.progress = 1;
-            game.emit(GAME_EVENT.SCENE_CHANGE, "landing");
+            if(key == getKeyEnum(ASSET_KEY.SOUNDTRACK_BGM)){
+                AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_BGM);
+            }
+            
         }, this);
     }
 }

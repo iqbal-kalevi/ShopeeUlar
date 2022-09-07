@@ -27,17 +27,20 @@ import {
   updateLocalStorageHighscore,
 } from "../../lib/util/localStorage";
 import {
+  getInvalidLevel,
   getRandomLevel,
   LevelConfig,
   levelConfigs,
   Position,
   SnakeInterval,
 } from "../config/level";
+import { ASSET_KEY } from "../enum/asset";
 import {
   AlertDialogButtonOption,
   AlertDialogOption,
   displayAlertDialog,
 } from "../util/AlertDialog/AlertDialogHandler";
+import { AudioHandler } from "./AudioHandler";
 import { HighscoreLoader } from "./HighscoreLoader";
 import { ShopeeSprite } from "./ShopeeSprite";
 const { ccclass, property } = _decorator;
@@ -70,6 +73,11 @@ export class GameplayManager extends Component {
   private currentScoreLabel: Label;
   @property({ type: HighscoreLoader })
   private highscoreLoader: HighscoreLoader;
+
+  @property({ type: Node })
+  private pressToStartLabel: Node;
+  @property({ type: Node })
+  private scoreIcons: Node;
 
   private tileSize = 26;
   private initialYPosition = 0;
@@ -125,17 +133,21 @@ export class GameplayManager extends Component {
       case KeyCode.ARROW_DOWN:
         newMoveDir = { x: 0, y: 1 };
         break;
+      case KeyCode.KEY_P:
+        this.onWin();
+        return;
       default:
-        newMoveDir = { x: 0, y: 0 };
-        break;
+        return;
     }
 
     if (
-      prevMoveDir.x + newMoveDir.x == 0 &&
-      prevMoveDir.y + newMoveDir.y == 0
+      (prevMoveDir.x + newMoveDir.x == 0 &&
+        prevMoveDir.y + newMoveDir.y == 0) ||
+      (prevMoveDir.x == newMoveDir.x && prevMoveDir.y == newMoveDir.y)
     ) {
       this.pendingMoveDir = prevMoveDir;
     } else {
+      AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_TURN);
       this.pendingMoveDir = newMoveDir;
     }
 
@@ -159,6 +171,10 @@ export class GameplayManager extends Component {
 
   setupLevel(levelConfig: LevelConfig, resetScore = true) {
     this.unscheduleSnake();
+
+    //UI reset.
+    this.pressToStartLabel.active = true;
+    this.scoreIcons.active = false;
 
     //Variables reset.
     if (resetScore) this.setScore(0);
@@ -320,26 +336,37 @@ export class GameplayManager extends Component {
   }
 
   onHazardCollide(message: string) {
+    AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_CRASH);
+
     this.isSnakeScheduleAllowed = false;
     this.unscheduleSnake();
 
     displayAlertDialog(
       new AlertDialogOption("Your Score", this.currentScore.toString(), [
         new AlertDialogButtonOption("Cancel", undefined, true, () => {
+          AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_BUTTON);
           game.emit(GAME_EVENT.SCENE_CHANGE, "landing");
         }),
         new AlertDialogButtonOption("Play Again", Color.RED, true, () => {
-          game.emit(GAME_EVENT.FADE_OUT, 1, () => {
-            this.setupLevel(getRandomLevel(), true);
-            game.emit(GAME_EVENT.FADE_IN, .25);
-          });
+          AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_BUTTON);
+          this.fadeAndSetupLevel();
         }),
       ])
     );
   }
 
+  fadeAndSetupLevel(resetScore: boolean = true) {
+    game.emit(GAME_EVENT.FADE_OUT, 1, () => {
+      this.setupLevel(getRandomLevel(), resetScore);
+      game.emit(GAME_EVENT.FADE_IN, 0.25);
+    });
+  }
+
   scheduleSnake() {
     if (this.isSnakeScheduled) return;
+
+    this.pressToStartLabel.active = false;
+    this.scoreIcons.active = true;
 
     this.isSnakeScheduled = true;
     this.snakeScheduleUpdateInterval = this.getSnakeScheduleUpdateInterval();
@@ -391,7 +418,13 @@ export class GameplayManager extends Component {
     }
 
     //Handle no valid fruit spawn position here.
-    console.log("You probably win the game.");
+    this.onWin();
+  }
+
+  onWin() {
+    this.isSnakeScheduleAllowed = false;
+    this.unscheduleSnake();
+    this.fadeAndSetupLevel(false);
   }
 
   snakeCollide(pos: Position, includeHead = true) {
@@ -408,6 +441,7 @@ export class GameplayManager extends Component {
   }
 
   onFruitEaten() {
+    AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_EAT);
     this.setScore(++this.currentScore);
     this.eatenFruitCount++;
     this.eatenFruitSnakePartIndexes.push(0);
@@ -462,8 +496,34 @@ export class GameplayManager extends Component {
 
     let prevSnakePos: Vec3 = null;
     let headSpriteNode: Node;
+
+    if (levelConfig.snakeConfig.parts.length < 3) {
+      this.onSnakeInvalid("Invalid length.");
+      return;
+    }
+
     for (let i = 0; i < levelConfig.snakeConfig.parts.length; i++) {
       const snakeTilePos = levelConfig.snakeConfig.parts[i];
+
+      if (
+        this.snakeCollide(snakeTilePos) ||
+        this.currentTileLayout[snakeTilePos.y][snakeTilePos.x] != 0
+      ) {
+        this.onSnakeInvalid("Invalid spawn point.");
+        return;
+      }
+
+      if (i > 0) {
+        const prevTilePos = levelConfig.snakeConfig.parts[i - 1];
+        const manhattanDist =
+          Math.abs(snakeTilePos.x - prevTilePos.x) +
+          Math.abs(snakeTilePos.y - prevTilePos.y);
+        if (manhattanDist != 1) {
+          this.onSnakeInvalid("Invalid distance.");
+          return;
+        }
+      }
+
       const localSpawnPos = this.tileToLocalPosition(
         snakeTilePos.x,
         snakeTilePos.y
@@ -505,18 +565,24 @@ export class GameplayManager extends Component {
     tweenDuration = this.snakeScheduleUpdateInterval
   ) {
     const dir = { x: nextPos.x - currentPos.x, y: nextPos.y - currentPos.y };
-    const angle =
+    const targetAngle =
       dir.x != 0 && dir.x <= -1
         ? 90
         : dir.y != 0 && dir.y <= -1
         ? 180
         : dir.x != 0 && dir.x >= 1
-        ? -90
+        ? 270
         : dir.x != 0 && dir.y >= 1
-        ? 0
+        ? 360
         : spriteNode.angle;
 
-    spriteNode.angle = angle;
+    const currentAngle = spriteNode.angle;
+    let offset = targetAngle - currentAngle;
+    offset = this.mod(offset + 180, 360) - 180;
+
+    tween(spriteNode)
+      .by(tweenDuration / 2, { angle: offset })
+      .start();
   }
 
   moveAndRotateSnakePart(bodyNode: Node, currentPos: Vec3, nextPos: Vec3) {
@@ -531,17 +597,26 @@ export class GameplayManager extends Component {
     tween(bodyNode)
       .to(
         this.snakeScheduleUpdateInterval,
-        { position: nextPos },
-        { easing: "quadOut" }
+        { position: nextPos }
+        // { easing: "quadOut" }
       )
       .start();
   }
 
-  onSnakeInvalid() {
+  onSnakeInvalid(msg) {
+    console.log(msg);
     this.isSnakeScheduleAllowed = false;
     this.unscheduleSnake();
     this.snakeParent.removeAllChildren();
-    console.log("Snake Invalid!");
+
+    displayAlertDialog(
+      new AlertDialogOption("Invalid Snake", "", [
+        new AlertDialogButtonOption("Cancel", undefined, true, () => {
+          AudioHandler.instance.play(ASSET_KEY.SOUNDTRACK_BUTTON);
+          game.emit(GAME_EVENT.SCENE_CHANGE, "landing");
+        }),
+      ])
+    );
   }
 
   tileToLocalPosition(x, y) {
@@ -562,5 +637,11 @@ export class GameplayManager extends Component {
 
   toggleFrame(frame, a, b) {
     return frame == a ? b : a;
+  }
+
+  //(a, n) -> a - floor(a/n) * n
+
+  mod(a, n): number {
+    return a - Math.floor(a / n) * n;
   }
 }
