@@ -236,8 +236,9 @@ export class GameplayManager extends Component {
           oldTailSprite.setFrame(SNAKE_SPRITE_TYPE.BODY);
           const oldTailAngle = oldTailSprite.node.angle;
 
-          const localTailSpawnPos = oldTail.position;
-          const tailSprite = this.instantiateSnakePart(localTailSpawnPos);
+          const tailSprite = this.instantiateSnakePart(
+            this.snakePartTilePos[this.snakeParent.children.length - 1]
+          );
           tailSprite.node.angle = oldTailAngle;
 
           tailSprite.setFrame(SNAKE_SPRITE_TYPE.TAIL);
@@ -274,15 +275,15 @@ export class GameplayManager extends Component {
           );
 
         //Handle movement.
-        const nextPos =
-          i == 0
-            ? this.tileToLocalPosition(newPos.x, newPos.y)
-            : this.snakeParent.children[i - 1].position;
+        const nextPos = i == 0 ? newPos : this.snakePartTilePos[i - 1];
 
-        this.moveAndRotateSnakePart(snakePart, snakePart.position, nextPos);
+        this.moveAndRotateSnakePart(
+          snakePart,
+          this.snakePartTilePos[i],
+          nextPos
+        );
 
-        const tilePos = this.localToTilePosition(nextPos.x, nextPos.y);
-        this.snakePartTilePos[i] = i == 0 ? newPos : tilePos;
+        this.snakePartTilePos[i] = i == 0 ? newPos : nextPos;
 
         //Handle eaten fruit's snake-part index position.
         for (let i = 0; i < this.eatenFruitSnakePartIndexes.length; i++) {
@@ -403,7 +404,7 @@ export class GameplayManager extends Component {
               this.fruit.setParent(this.fruitParent);
             }
 
-            this.fruit.position = this.tileToLocalPosition(x, y);
+            this.fruit.position = this.tileToLocalPosition({ x: x, y: y });
             this.fruitTilePos = { x: x, y: y };
             return;
           }
@@ -471,7 +472,7 @@ export class GameplayManager extends Component {
             : this.wallPrefab
         );
         tile.setParent(this.tileParent);
-        tile.position = this.tileToLocalPosition(col, row);
+        tile.position = this.tileToLocalPosition({ x: col, y: row });
         tileFrame = this.toggleFrame(tileFrame, 0, 2);
 
         if (this.currentTileLayout[row][col] == 0) {
@@ -482,19 +483,18 @@ export class GameplayManager extends Component {
     }
   }
 
-  instantiateSnakePart(position: Vec3) {
+  instantiateSnakePart(tilePosition: Position) {
     const snakePart: Node = instantiate(this.snakePartPrefab);
     snakePart.setParent(this.snakeParent);
-    snakePart.position = position;
-    const tilePos = this.localToTilePosition(position.x, position.y);
-    this.snakePartTilePos.push(tilePos);
+    snakePart.position = this.tileToLocalPosition(tilePosition);
+    this.snakePartTilePos.push(tilePosition);
     return snakePart.getComponentInChildren(ShopeeSprite);
   }
 
   generateSnake(levelConfig: LevelConfig) {
     this.snakeParent.removeAllChildren();
 
-    let prevSnakePos: Vec3 = null;
+    let prevSnakeTilePos: Position = null;
     let headSpriteNode: Node;
 
     if (levelConfig.snakeConfig.parts.length < 3) {
@@ -524,21 +524,27 @@ export class GameplayManager extends Component {
         }
       }
 
-      const localSpawnPos = this.tileToLocalPosition(
-        snakeTilePos.x,
-        snakeTilePos.y
-      );
-      const snakeSprite = this.instantiateSnakePart(localSpawnPos);
+      const snakeSprite = this.instantiateSnakePart(snakeTilePos);
 
       if (i == 0) {
         headSpriteNode = snakeSprite.node;
       }
 
-      if (prevSnakePos != null) {
-        this.rotateSnakePart(snakeSprite.node, localSpawnPos, prevSnakePos, 0);
+      if (prevSnakeTilePos != null) {
+        this.rotateSnakePart(
+          snakeSprite.node,
+          snakeTilePos,
+          prevSnakeTilePos,
+          0
+        );
 
         if (i == 1) {
-          this.rotateSnakePart(headSpriteNode, localSpawnPos, prevSnakePos, 0);
+          this.rotateSnakePart(
+            headSpriteNode,
+            snakeTilePos,
+            prevSnakeTilePos,
+            0
+          );
           this.moveDir = {
             x: this.snakePartTilePos[0].x - snakeTilePos.x,
             y: this.snakePartTilePos[0].y - snakeTilePos.y,
@@ -552,7 +558,7 @@ export class GameplayManager extends Component {
         }
       }
 
-      prevSnakePos = localSpawnPos;
+      prevSnakeTilePos = snakeTilePos;
     }
 
     this.snakeInterval = levelConfig.snakeConfig.interval;
@@ -560,20 +566,23 @@ export class GameplayManager extends Component {
 
   rotateSnakePart(
     spriteNode: Node,
-    currentPos: Vec3,
-    nextPos: Vec3,
+    currentTilePos: Position,
+    nextTilePos: Position,
     tweenDuration = this.snakeScheduleUpdateInterval
   ) {
-    const dir = { x: nextPos.x - currentPos.x, y: nextPos.y - currentPos.y };
+    const dir = {
+      x: nextTilePos.x - currentTilePos.x,
+      y: nextTilePos.y - currentTilePos.y,
+    };
     const targetAngle =
-      dir.x != 0 && dir.x <= -1
+      dir.x <= -1
         ? 90
-        : dir.y != 0 && dir.y <= -1
-        ? 180
-        : dir.x != 0 && dir.x >= 1
-        ? 270
-        : dir.x != 0 && dir.y >= 1
+        : dir.y <= -1
         ? 360
+        : dir.x >= 1
+        ? 270
+        : dir.y >= 1
+        ? 180
         : spriteNode.angle;
 
     const currentAngle = spriteNode.angle;
@@ -581,23 +590,27 @@ export class GameplayManager extends Component {
     offset = this.mod(offset + 180, 360) - 180;
 
     tween(spriteNode)
-      .by(tweenDuration / 2, { angle: offset })
+      .by(tweenDuration, { angle: offset })
       .start();
   }
 
-  moveAndRotateSnakePart(bodyNode: Node, currentPos: Vec3, nextPos: Vec3) {
+  moveAndRotateSnakePart(
+    bodyNode: Node,
+    currentTilePos: Position,
+    nextTilePos: Position
+  ) {
     const spriteNode = bodyNode.getComponentInChildren(ShopeeSprite).node;
     this.rotateSnakePart(
       spriteNode,
-      currentPos,
-      nextPos,
+      currentTilePos,
+      nextTilePos,
       this.snakeScheduleUpdateInterval
     );
 
     tween(bodyNode)
       .to(
         this.snakeScheduleUpdateInterval,
-        { position: nextPos }
+        { position: this.tileToLocalPosition(nextTilePos) }
         // { easing: "quadOut" }
       )
       .start();
@@ -619,18 +632,20 @@ export class GameplayManager extends Component {
     );
   }
 
-  tileToLocalPosition(x, y) {
+  tileToLocalPosition(position: Position) {
     return new Vec3(
-      this.initialXPosition + x * this.tileSize,
-      this.initialYPosition - y * this.tileSize
+      this.initialXPosition + position.x * this.tileSize,
+      this.initialYPosition - position.y * this.tileSize
     );
   }
 
-  localToTilePosition(x, y) {
+  localToTilePosition(position: Vec3) {
     return {
-      x: Math.round(x / this.tileSize - this.initialXPosition / this.tileSize),
+      x: Math.round(
+        position.x / this.tileSize - this.initialXPosition / this.tileSize
+      ),
       y: Math.round(
-        -(y / this.tileSize - this.initialYPosition / this.tileSize)
+        -(position.y / this.tileSize - this.initialYPosition / this.tileSize)
       ),
     };
   }
